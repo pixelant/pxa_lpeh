@@ -16,6 +16,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Core\Cache\CacheManager;
 use TYPO3\CMS\Core\Controller\ErrorPageController;
+use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Error\PageErrorHandler\PageContentErrorHandler;
 use TYPO3\CMS\Core\Exception\SiteNotFoundException;
 use TYPO3\CMS\Core\Http\HtmlResponse;
@@ -26,12 +27,13 @@ use TYPO3\CMS\Core\Package\PackageManager;
 use TYPO3\CMS\Core\Service\DependencyOrderingService;
 use TYPO3\CMS\Core\Site\Entity\Site;
 use TYPO3\CMS\Core\Site\SiteFinder;
+use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Http\RequestHandler;
 
 /**
- * Does not execute a CURL request for internal pages. Just set it up in an extension
- * and refer to it in your Site Configuration (PHP Error Handler)
+ * Does not execute a CURL request for internal pages.
+ * Refer to it in your Site Configuration (PHP Error Handler)
  */
 class LocalPageErrorHandler extends PageContentErrorHandler
 {
@@ -45,18 +47,20 @@ class LocalPageErrorHandler extends PageContentErrorHandler
     public function handlePageError(ServerRequestInterface $request, string $message, array $reasons = []): ResponseInterface
     {
         $targetDetails = $this->resolveDetails($this->errorHandlerConfiguration['errorContentSource']);
-        $siteIsValid = $this->resolveSite($request, (int)$targetDetails['pageuid']);
-        $pageIdIsValid = $this->doesSiteHavePage($request, (int)$targetDetails['pageuid']);
+        $pageId = $this->resolvePageId($request, (int)$targetDetails['pageuid']);
 
-        if ($targetDetails['type'] === 'page' && $siteIsValid && $pageIdIsValid) {
-            $response = $this->buildSubRequest($request, (int)$targetDetails['pageuid']);
-            return $response->withStatus($this->statusCode);
+        if (!empty($pageId)) {
+            $site = $this->resolveSite($request, $pageId);
+            $pageIsValid = $this->isPageValid($pageId);
+            if ($targetDetails['type'] === 'page' && !empty($site) && $pageIsValid) {
+                $response = $this->buildSubRequest($request, $pageId);
+                return $response->withStatus($this->statusCode);
+            }
         }
 
-        $httpStatus = '\\TYPO3\\CMS\\Core\\Utility\\HttpUtility::HTTP_STATUS_' . $this->statusCode;
         $content = GeneralUtility::makeInstance(ErrorPageController::class)->errorAction(
             $this->statusCode,
-            constant($httpStatus)
+            $this->getHttpUtilityStatusInformationText()
         );
         return new HtmlResponse($content, $this->statusCode);
     }
@@ -109,9 +113,9 @@ class LocalPageErrorHandler extends PageContentErrorHandler
     /**
      * @param ServerRequestInterface $request
      * @param int $pageId
-     * @return bool
+     * @return Site|null
      */
-    protected function resolveSite(ServerRequestInterface &$request, int $pageId): bool
+    protected function resolveSite(ServerRequestInterface &$request, int $pageId): ?Site
     {
         $site = $request->getAttribute('site', null);
         if (!$site instanceof Site) {
@@ -119,24 +123,87 @@ class LocalPageErrorHandler extends PageContentErrorHandler
                 $site = GeneralUtility::makeInstance(SiteFinder::class)->getSiteByPageId($pageId);
                 $request = $request->withAttribute('site', $site);
             } catch (\Throwable $th) {
-                return false;
+                return null;
             }
+        }
+        return $request->getAttribute('site', null);
+    }
+
+    /**
+     * Resolve PageId, make sure there is a translated version of the page.
+     *
+     * @param ServerRequestInterface $request
+     * @param int $pageId
+     * @return int|null
+     */
+    protected function resolvePageId(ServerRequestInterface $request, int $pageId): ?int
+    {
+        $siteLanguage = $request->getAttribute('language');
+        if ($siteLanguage instanceof SiteLanguage) {
+            $languageId = $siteLanguage->getLanguageId() ?? 0;
+            if ($languageId > 0) {
+                return $this->getLocalizedPageId($pageId, $languageId);
+            }
+        }
+        return $pageId;
+    }
+
+    /**
+     * Get localized page id
+     *
+     * @param integer $pageId
+     * @param integer $languageId
+     * @return int|null
+     */
+    protected function getLocalizedPageId(int $pageId, int $languageId): ?int
+    {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable('pages');
+
+        $statement = $queryBuilder
+            ->select('uid')
+            ->from('pages')
+            ->where(
+                $queryBuilder->expr()->eq(
+                    'l10n_parent',
+                    $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
+                ),
+                $queryBuilder->expr()->eq(
+                    'sys_language_uid',
+                    $queryBuilder->createNamedParameter($languageId, \PDO::PARAM_INT)
+                )
+            )
+            ->execute();
+
+        $page = $statement->fetch();
+        if (empty($page)) {
+            return null;
+        }
+        return $page['uid'];
+    }
+
+    /**
+     * @param int $pageId
+     * @return bool
+     */
+    protected function isPageValid(int $pageId): bool
+    {
+        try {
+            GeneralUtility::makeInstance(SiteFinder::class)->getSiteByPageId($pageId);
+        } catch (\Throwable $th) {
+            return false;
         }
         return true;
     }
 
     /**
-     * @param ServerRequestInterface $request
-     * @param int $pageId
-     * @return bool
+     * @return string
      */
-    protected function doesSiteHavePage(ServerRequestInterface &$request, int $pageId): bool
+    protected function getHttpUtilityStatusInformationText()
     {
-        try {
-            $site = GeneralUtility::makeInstance(SiteFinder::class)->getSiteByPageId($pageId);
-        } catch (\Throwable $th) {
-            return false;
-        }
-        return true;
+        $httpStatus = \TYPO3\CMS\Core\Utility\HttpUtility::class .
+            '::HTTP_STATUS_' .
+            $this->statusCode ?? 'N/A';
+        return constant($httpStatus);
     }
 }
