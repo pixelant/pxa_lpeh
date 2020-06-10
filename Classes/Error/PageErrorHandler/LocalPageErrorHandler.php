@@ -58,11 +58,15 @@ class LocalPageErrorHandler extends PageContentErrorHandler
             }
         }
 
-        $content = GeneralUtility::makeInstance(ErrorPageController::class)->errorAction(
-            $this->statusCode,
-            $this->getHttpUtilityStatusInformationText()
-        );
-        return new HtmlResponse($content, $this->statusCode);
+        try {
+            return parent::handlePageError($request, $message, $reasons);
+        } catch (\Exception $exception) {
+            $content = GeneralUtility::makeInstance(ErrorPageController::class)->errorAction(
+                $this->statusCode,
+                $this->getHttpUtilityStatusInformationText()
+            );
+            return new HtmlResponse($content, $this->statusCode);
+        }
     }
 
     /**
