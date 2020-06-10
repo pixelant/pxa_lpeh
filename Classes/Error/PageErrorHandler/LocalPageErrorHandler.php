@@ -29,6 +29,7 @@ use TYPO3\CMS\Core\Site\Entity\Site;
 use TYPO3\CMS\Core\Site\SiteFinder;
 use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\VersionNumberUtility;
 use TYPO3\CMS\Frontend\Http\RequestHandler;
 
 /**
@@ -104,11 +105,19 @@ class LocalPageErrorHandler extends PageContentErrorHandler
     protected function buildDispatcher()
     {
         $requestHandler = GeneralUtility::makeInstance(RequestHandler::class);
-        $resolver = new MiddlewareStackResolver(
-            GeneralUtility::makeInstance(PackageManager::class),
-            GeneralUtility::makeInstance(DependencyOrderingService::class),
-            GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_core')
-        );
+
+        if (VersionNumberUtility::convertVersionNumberToInteger(TYPO3_version) >= 10000000) {
+            $resolver = GeneralUtility::makeInstance(
+                MiddlewareStackResolver::class
+            );
+        } else {
+            $resolver = GeneralUtility::makeInstance(
+                MiddlewareStackResolver::class,
+                GeneralUtility::makeInstance(PackageManager::class),
+                GeneralUtility::makeInstance(DependencyOrderingService::class),
+                GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_core')
+            );
+        }
 
         $middlewares = $resolver->resolve('frontend');
         return new MiddlewareDispatcher($requestHandler, $middlewares);
