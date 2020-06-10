@@ -20,7 +20,6 @@
     "issues": "https://github.com/pixelant/pxa_lpeh/issues"
   },
   "replace": {
-    "pxa_lpeh": "self.version",
     "pixelant/pxa-lpeh": "self.version"
   },
   "require": {
