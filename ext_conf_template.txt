@@ -1,0 +1,2 @@
+# cat=Runtime; type=boolean; label=Don't replace the standard "Show Content from Page" error handler, use "PHP Class" instead
+disableXClass = 0
