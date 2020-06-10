@@ -14,9 +14,9 @@ namespace Pixelant\PxaLpeh\Error\PageErrorHandler;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Cache\CacheManager;
 use TYPO3\CMS\Core\Controller\ErrorPageController;
-use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Error\PageErrorHandler\PageContentErrorHandler;
 use TYPO3\CMS\Core\Exception\SiteNotFoundException;
 use TYPO3\CMS\Core\Http\HtmlResponse;
@@ -29,6 +29,7 @@ use TYPO3\CMS\Core\Site\Entity\Site;
 use TYPO3\CMS\Core\Site\SiteFinder;
 use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\VersionNumberUtility;
 use TYPO3\CMS\Frontend\Http\RequestHandler;
 
 /**
@@ -58,11 +59,15 @@ class LocalPageErrorHandler extends PageContentErrorHandler
             }
         }
 
-        $content = GeneralUtility::makeInstance(ErrorPageController::class)->errorAction(
-            $this->statusCode,
-            $this->getHttpUtilityStatusInformationText()
-        );
-        return new HtmlResponse($content, $this->statusCode);
+        try {
+            return parent::handlePageError($request, $message, $reasons);
+        } catch (\Exception $exception) {
+            $content = GeneralUtility::makeInstance(ErrorPageController::class)->errorAction(
+                $this->statusCode,
+                $this->getHttpUtilityStatusInformationText()
+            );
+            return new HtmlResponse($content, $this->statusCode);
+        }
     }
 
     /**
@@ -100,11 +105,19 @@ class LocalPageErrorHandler extends PageContentErrorHandler
     protected function buildDispatcher()
     {
         $requestHandler = GeneralUtility::makeInstance(RequestHandler::class);
-        $resolver = new MiddlewareStackResolver(
-            GeneralUtility::makeInstance(PackageManager::class),
-            GeneralUtility::makeInstance(DependencyOrderingService::class),
-            GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_core')
-        );
+
+        if (VersionNumberUtility::convertVersionNumberToInteger(TYPO3_version) >= 10000000) {
+            $resolver = GeneralUtility::makeInstance(
+                MiddlewareStackResolver::class
+            );
+        } else {
+            $resolver = GeneralUtility::makeInstance(
+                MiddlewareStackResolver::class,
+                GeneralUtility::makeInstance(PackageManager::class),
+                GeneralUtility::makeInstance(DependencyOrderingService::class),
+                GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_core')
+            );
+        }
 
         $middlewares = $resolver->resolve('frontend');
         return new MiddlewareDispatcher($requestHandler, $middlewares);
@@ -142,7 +155,17 @@ class LocalPageErrorHandler extends PageContentErrorHandler
         if ($siteLanguage instanceof SiteLanguage) {
             $languageId = $siteLanguage->getLanguageId() ?? 0;
             if ($languageId > 0) {
-                return $this->getLocalizedPageId($pageId, $languageId);
+                $translatedPageId = $this->getLocalizedPageId($pageId, $languageId);
+
+                foreach ($siteLanguage->getFallbackLanguageIds() as $languageId) {
+                    if ($translatedPageId !== null) {
+                        break;
+                    }
+
+                    $translatedPageId = $this->getLocalizedPageId($pageId, $languageId);
+                }
+
+                return $translatedPageId;
             }
         }
         return $pageId;
@@ -157,29 +180,16 @@ class LocalPageErrorHandler extends PageContentErrorHandler
      */
     protected function getLocalizedPageId(int $pageId, int $languageId): ?int
     {
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getQueryBuilderForTable('pages');
+        $page = BackendUtility::getRecordLocalization(
+            'pages',
+            $pageId,
+            $languageId
+        );
 
-        $statement = $queryBuilder
-            ->select('uid')
-            ->from('pages')
-            ->where(
-                $queryBuilder->expr()->eq(
-                    'l10n_parent',
-                    $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
-                ),
-                $queryBuilder->expr()->eq(
-                    'sys_language_uid',
-                    $queryBuilder->createNamedParameter($languageId, \PDO::PARAM_INT)
-                )
-            )
-            ->execute();
-
-        $page = $statement->fetch();
-        if (empty($page)) {
+        if ($page === false || empty($page)) {
             return null;
         }
-        return $page['uid'];
+        return $page[0]['uid'];
     }
 
     /**

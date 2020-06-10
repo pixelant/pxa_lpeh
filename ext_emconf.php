@@ -1,12 +1,12 @@
 <?php
 $EM_CONF[$_EXTKEY] = array(
     'title' => 'Local Page Error Handler',
-    'description' => 'Add Local Page Error Handler to TYPO3',
+    'description' => 'Speeds up error page handling and frees up PHP workers by loading local page content without issuing an external HTTP request.',
     'category' => 'fe',
     'author' => 'Pixelant',
-    'author_email' => '',
+    'author_email' => 'info@pixelant.net',
     'author_company' => 'Pixelant',
-    'state' => 'alpha',
+    'state' => 'stable',
     'uploadfolder' => 0,
     'createDirs' => '',
     'clearCacheOnLoad' => 0,
