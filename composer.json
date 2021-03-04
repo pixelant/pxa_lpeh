@@ -1,7 +1,6 @@
 {
   "name": "pixelant/pxa-lpeh",
   "description": "Speeds up error page handling and frees up PHP workers by loading local page content without issuing an external HTTP request.",
-  "version": "1.0.0",
   "type": "typo3-cms-extension",
   "license": "GPL-3.0+",
   "authors": [
@@ -18,9 +17,6 @@
   "homepage": "https://github.com/pixelant/pxa_lpeh",
   "support": {
     "issues": "https://github.com/pixelant/pxa_lpeh/issues"
-  },
-  "replace": {
-    "pixelant/pxa-lpeh": "self.version"
   },
   "require": {
     "php": "^7.2",
