@@ -26,7 +26,7 @@
     "psr-4": {
       "Pixelant\\PxaLpeh\\": "Classes/"
     }
-  }
+  },
   "extra": {
     "typo3/cms": {
       "extension-key": "pxa_lpeh"
