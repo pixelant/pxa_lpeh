@@ -19,7 +19,7 @@
     "issues": "https://github.com/pixelant/pxa_lpeh/issues"
   },
   "require": {
-    "typo3/cms-core": "^9.5 || ^10.1 || ^11.5"
+    "typo3/cms-core": "^9.5 || ^10.1 || ^11.5"
   },
   "autoload": {
     "psr-4": {
