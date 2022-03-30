@@ -120,6 +120,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
         }
 
         $middlewares = $resolver->resolve('frontend');
+        unset($middlewares['typo3/cms-frontend/maintenance-mode']);
         return new MiddlewareDispatcher($requestHandler, $middlewares);
     }
 
