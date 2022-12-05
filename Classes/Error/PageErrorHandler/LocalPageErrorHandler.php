@@ -50,11 +50,13 @@ class LocalPageErrorHandler extends PageContentErrorHandler
         $targetDetails = $this->resolveDetails($this->errorHandlerConfiguration['errorContentSource']);
         $pageId = $this->resolvePageId($request, (int)$targetDetails['pageuid']);
 
-        if (!empty($pageId)) {
+        if (!empty($pageId) && empty($request->getHeader('x-lpeh'))) {
             $site = $this->resolveSite($request, $pageId);
             $pageIsValid = $this->isPageValid($pageId);
             if ($targetDetails['type'] === 'page' && !empty($site) && $pageIsValid) {
+                $request = $request->withHeader('x-lpeh', (string)time());
                 $response = $this->buildSubRequest($request, $pageId);
+
                 return $response->withStatus($this->statusCode);
             }
         }
@@ -66,6 +68,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
                 $this->statusCode,
                 $this->getHttpUtilityStatusInformationText()
             );
+
             return new HtmlResponse($content, $this->statusCode);
         }
     }
@@ -83,6 +86,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
     {
         $request = $request->withQueryParams(['id' => $pageId]);
         $dispatcher = $this->buildDispatcher();
+
         return $dispatcher->handle($request);
     }
 
@@ -93,6 +97,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
     protected function resolveDetails(string $typoLinkUrl): array
     {
         $linkService = GeneralUtility::makeInstance(LinkService::class);
+
         return $linkService->resolve($typoLinkUrl);
     }
 
@@ -121,6 +126,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
 
         $middlewares = $resolver->resolve('frontend');
         unset($middlewares['typo3/cms-frontend/maintenance-mode']);
+
         return new MiddlewareDispatcher($requestHandler, $middlewares);
     }
 
@@ -140,6 +146,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
                 return null;
             }
         }
+
         return $request->getAttribute('site', null);
     }
 
@@ -169,11 +176,12 @@ class LocalPageErrorHandler extends PageContentErrorHandler
                 return $translatedPageId;
             }
         }
+
         return $pageId;
     }
 
     /**
-     * Get localized page id
+     * Get localized page id.
      *
      * @param integer $pageId
      * @param integer $languageId
@@ -190,6 +198,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
         if ($page === false || empty($page)) {
             return null;
         }
+
         return $page[0]['uid'];
     }
 
@@ -204,6 +213,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
         } catch (\Throwable $th) {
             return false;
         }
+
         return true;
     }
 
@@ -215,6 +225,7 @@ class LocalPageErrorHandler extends PageContentErrorHandler
         $httpStatus = \TYPO3\CMS\Core\Utility\HttpUtility::class .
             '::HTTP_STATUS_' .
             $this->statusCode ?? 'N/A';
+
         return constant($httpStatus);
     }
 }
