@@ -1,5 +1,7 @@
 # Local Page Error Handler for TYPO3
 
+Note: `pxa_lpeh` is not required for TYPO3 v12 and later. The TYPO3 core does [not issue subrequests anymore](https://forge.typo3.org/issues/94402).
+
 This extension speeds up error page handling and frees up PHP workers by loading local page content without issuing an external HTTP request.
 
 The speed increase depends on the round-trip time for external HTTP requests for your server (including resolving the DNS), but it could easily be 3x what you're having today.
